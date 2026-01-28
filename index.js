@@ -1,28 +1,37 @@
-import express from "express";
-import fetch from "node-fetch";
+const express = require("express");
+const fetch = require("node-fetch");
 
 const app = express();
-const cache = new Map();
+const PORT = process.env.PORT || 3000;
 
-app.get("/gamepasses", async (req, res) => {
-  const userId = req.query.userId;
-  if (!userId) return res.status(400).send("Missing userId");
-
-  if (cache.has(userId)) return res.json(cache.get(userId));
-
-  const url = `https://apis.roblox.com/game-passes/v1/users/${userId}/game-passes?count=100`;
-  const response = await fetch(url);
-  const data = await response.json();
-
-  const passes = data.data
-    .filter(p => p.price && p.price > 0)
-    .map(p => ({ id: p.id, price: p.price }))
-    .sort((a, b) => a.price - b.price);
-
-  cache.set(userId, passes);
-  setTimeout(() => cache.delete(userId), 300000);
-
-  res.json(passes);
+// Friendly root
+app.get("/", (req, res) => {
+  res.send("Gamepass backend is alive! Use /passes/:userId");
 });
 
-app.listen(process.env.PORT || 3000);
+// Actual gamepass route
+app.get("/passes/:userId", async (req, res) => {
+  const userId = req.params.userId;
+
+  try {
+    const r = await fetch(
+      `https://apis.roblox.com/game-passes/v1/users/${userId}/game-passes?count=100`,
+      { headers: { "User-Agent": "RobloxProxy" } }
+    );
+
+    const data = await r.json();
+
+    const passes = data.data
+      .filter(p => p.price && p.price > 0)
+      .map(p => ({ id: p.id, price: p.price }))
+      .sort((a, b) => a.price - b.price);
+
+    res.json(passes);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch passes" });
+  }
+});
+
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
